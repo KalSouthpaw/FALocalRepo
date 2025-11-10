@@ -178,7 +178,7 @@ class Bar:
 # noinspection DuplicatedCode
 class Downloader:
     def __init__(self, db: Database, api: FAAPI, *, color: bool = True, retry: int = 0, comments: bool = False,
-                 content_only: bool = False, replace: bool = False, dry_run: bool = False):
+                 content_only: bool = False, replace: bool = False, dry_run: bool = False, thumbnails: bool = True):
         self.db: Database = db
         self.bbcode: bool = self.db.settings.bbcode
         self.output: OutputType = OutputType.rich if terminal_width() > 0 else OutputType.simple
@@ -188,6 +188,7 @@ class Downloader:
         self.content_only: bool = content_only
         self.replace: bool = replace
         self.dry_run: bool = dry_run
+        self.save_thumbnails: bool = thumbnails  # <-- ADD THIS
         self.api: FAAPI = api
         self.bar_width: int = 10
         self._bar: Bar | None = None
@@ -376,6 +377,7 @@ class Downloader:
         self.bar_clear()
         self.bar_close("\b")
         self.bar(7)
+        # REPLACE WITH THIS BLOCK
         file: bytes | None = self.download_bytes(submission.file_url)
         retry: int = self.retry + 1
         while file is None and (retry := retry - 1):
@@ -384,13 +386,17 @@ class Downloader:
             file = self.download_bytes(submission.file_url)
         self.bar_message(("#" * self.bar_width) if file else "ERROR", green if file else red, always=True)
         self.bar_close("]")
-        self.bar(1)
-        thumb: bytes | None = self.download_bytes(submission.thumbnail_url or thumbnail)
-        retry = self.retry + 1
-        while thumb is None and (retry := retry - 1):
-            self.bar_message(f"RETRY {self.retry - retry + 1}", red)
-            self.api.handle_delay()
+
+        self.bar(1) # This creates the bar for the thumbnail status
+        thumb: bytes | None = None
+        if self.save_thumbnails:
             thumb = self.download_bytes(submission.thumbnail_url or thumbnail)
+            retry = self.retry + 1
+            while thumb is None and (retry := retry - 1):
+                self.bar_message(f"RETRY {self.retry - retry + 1}", red)
+                self.api.handle_delay()
+                thumb = self.download_bytes(submission.thumbnail_url or thumbnail)
+
         self.db.submissions.save_submission({
             **format_entry(dict(submission), self.db.submissions.columns),
             SubmissionsColumns.GENDER.name: submission.gender or "",
@@ -402,16 +408,23 @@ class Downloader:
             else submission.description,
             SubmissionsColumns.FOOTER.name: (submission.footer_bbcode if self.bbcode else submission.footer)
             if not self.content_only else "",
-        }, [file], thumb, replace=replace)
+        }, [file], thumb, replace=replace) # `thumb` will be None if not downloaded
+
         if self.save_comments:
             save_comments(self.db, submissions_table, submission.id, submission.comments,
-                          replace=replace, bbcode=self.bbcode)
+                        replace=replace, bbcode=self.bbcode)
         self.db.commit()
-        self.bar_message(("#" * self.bar_width) if thumb else "ERROR", green if thumb else red, always=True)
+
+        if self.save_thumbnails:
+            self.bar_message(("#" * self.bar_width) if thumb else "ERROR", green if thumb else red, always=True)
+        else:
+            self.bar_message("SKIPPED", yellow, always=True) # Feedback for skipped thumb
         self.bar_close()
+
         self.added_submissions += [submission_id]
         self.file_errors += [] if file else [submission_id]
-        self.thumbnail_errors += [] if thumb else [submission_id]
+        if self.save_thumbnails:
+            self.thumbnail_errors += [] if thumb else [submission_id]
         return 0
 
     def download_user_folder(self, user: str, folder: str, downloader_entries: Callable[[str, P], tuple[list[T], P]],

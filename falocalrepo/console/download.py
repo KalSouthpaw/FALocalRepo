@@ -70,7 +70,7 @@ retry_option = option("--retry", metavar="INTEGER", default=1, type=IntRange(1, 
                       help="Retry downloads.")
 comments_option = option("--no-comments", "save_comments", is_flag=True, default=True, help="Do not save comments.")
 content_only_option = option("--content-only", is_flag=True, default=False, help="Do not save headers and footers.")
-
+thumbnails_option = option("--no-thumbnails", "save_thumbnails", is_flag=True, default=True, help="Do not save thumbnails.")
 
 def users_callback(ctx: Context, param: Option, value: tuple[str, ...]) -> tuple[str, ...]:
     if not value or ctx.params.get("like"):
@@ -106,6 +106,7 @@ def download_app():
 @retry_option
 @comments_option
 @content_only_option
+@thumbnails_option  # <-- ADD THIS
 @option("--replace", is_flag=True, default=False, show_default=True, help="Replace entries already in database.")
 @dry_run_option
 @verbose_report_option
@@ -119,7 +120,7 @@ def download_app():
                             [Folder.watchlist_to + f":{yellow}FOLDER{reset}"]))
 def download_users(ctx: Context, database: Callable[..., Database], users: tuple[str], folders: tuple[str],
                    retry: int | None, save_comments: bool, content_only: bool, replace: bool, dry_run: bool,
-                   verbose_report: bool, report_file: TextIO | None):
+                   verbose_report: bool, report_file: TextIO | None, save_thumbnails: bool):
     """
     Download specific user folders, where {yellow}FOLDER{reset} is one of {0}. Multiple {yellow}--user{reset} and
     {yellow}--folder{reset} arguments can be passed. {yellow}USER{reset} can be set to {cyan}@me{reset} to fetch own
@@ -141,7 +142,7 @@ def download_users(ctx: Context, database: Callable[..., Database], users: tuple
     db: Database = database()
     api: FAAPI = open_api(db, ctx)
     downloader: Downloader = Downloader(db, api, color=ctx.color, comments=save_comments, content_only=content_only,
-                                        retry=retry or 0, replace=replace, dry_run=dry_run)
+                                        retry=retry or 0, replace=replace, dry_run=dry_run, thumbnails=save_thumbnails)
     if not dry_run:
         backup_database(db, ctx, "predownload")
         add_history(db, ctx, users=users, folders=folders)
@@ -188,6 +189,7 @@ def download_users(ctx: Context, database: Callable[..., Database], users: tuple
 @retry_option
 @comments_option
 @content_only_option
+@thumbnails_option  # <-- ADD THIS
 @dry_run_option
 @verbose_report_option
 @report_file_option
@@ -198,7 +200,7 @@ def download_users(ctx: Context, database: Callable[..., Database], users: tuple
 @docstring_format(', '.join(c.value for c in UpdateFolderChoice.completion_items))
 def download_update(ctx: Context, database: Callable[..., Database], users: tuple[str], folders: tuple[str], stop: int,
                     deactivated: bool, like: bool, retry: int | None, save_comments: bool, content_only: bool,
-                    dry_run: bool, verbose_report: bool, report_file: TextIO | None):
+                    dry_run: bool, verbose_report: bool, report_file: TextIO | None, save_thumbnails: bool):
     """
     Download new entries using the users and folders already in the database. {yellow}--user{reset} and
     {yellow}--folder{reset} options can be used to restrict the update to specific users and or folders, where
@@ -226,7 +228,7 @@ def download_update(ctx: Context, database: Callable[..., Database], users: tupl
     db: Database = database()
     api: FAAPI = open_api(db, ctx)
     downloader: Downloader = Downloader(db, api, color=ctx.color, comments=save_comments, content_only=content_only,
-                                        retry=retry or 0, dry_run=dry_run)
+                                        retry=retry or 0, dry_run=dry_run, thumbnails=save_thumbnails)
     if not dry_run:
         backup_database(db, ctx, "predownload")
         add_history(db, ctx, users=users, folders=folders, stop=stop)
@@ -256,6 +258,7 @@ def download_update(ctx: Context, database: Callable[..., Database], users: tupl
 @option("--replace", is_flag=True, default=False, show_default=True, help="Replace submissions already in database.")
 @retry_option
 @comments_option
+@thumbnails_option  # <-- ADD THIS
 @option("--content-only", is_flag=True, default=False, help="Do not save footers.")
 @dry_run_option
 @verbose_report_option
@@ -267,7 +270,7 @@ def download_update(ctx: Context, database: Callable[..., Database], users: tupl
 @docstring_format()
 def download_submissions(ctx: Context, database: Callable[..., Database], submission_id: tuple[int], replace: bool,
                          retry: int | None, save_comments: bool, content_only: bool, dry_run: bool,
-                         verbose_report: bool, report_file: TextIO | None):
+                         verbose_report: bool, report_file: TextIO | None, save_thumbnails: bool):
     """
     Download single submissions, where {yellow}SUBMISSION_ID{reset} is the ID of the submission.
 
@@ -285,7 +288,7 @@ def download_submissions(ctx: Context, database: Callable[..., Database], submis
     db: Database = database()
     api: FAAPI = open_api(db, ctx)
     downloader: Downloader = Downloader(db, api, color=ctx.color, comments=save_comments, content_only=content_only,
-                                        retry=retry or 0, replace=replace, dry_run=dry_run)
+                                        retry=retry or 0, replace=replace, dry_run=dry_run, thumbnails=save_thumbnails)
     if not dry_run:
         backup_database(db, ctx, "predownload")
         add_history(db, ctx, submission_id=submission_id, replace=replace)
